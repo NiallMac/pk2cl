@@ -8,6 +8,7 @@ from scipy.integrate import quad
 import sys
 sys.path.append("LOG_HT")
 from LOG_HT import fft_log
+import time
 
 inv_sqrt2pi = 1./np.sqrt(2*np.pi)
 
@@ -60,6 +61,8 @@ def non_limber_integral(ell, chimin, chimax, nchi, fftlog_kernel_interp1, fftlog
 
 def main():
 
+    do_plot=True
+
     #Read in z, chi, k, P(k,0) and growth D(z)
     z_pk = np.loadtxt("test_output_pkhighres/matter_power_lin/z.txt")
     z_dist = np.loadtxt("test_output_pkhighres/distances/z.txt")
@@ -78,41 +81,58 @@ def main():
     growth_interp = interp1d(chi, growth, bounds_error=False, fill_value=0.)
 
     #define a Gaussian kernel in chi
-    #e.g. corresponding to z_mean=0.5, sigma_z=0.1
+    #e.g. corresponding to z_mean=0.5, sigma_z=0.1 and also sigma_z=0.05
     z_mean=0.5
-    sigma_z=0.1
-    chi_of_z_interp = IUS(z_pk, chi)
-    chi_mean = chi_of_z_interp(z_mean)
-    sigma_chi = sigma_z * chi_of_z_interp.derivative()(z_mean)
-    print("chi_mean, sigma_chi:")
-    print(chi_mean, sigma_chi)
-    #Set chi_min/max +/- 4 sigma from mean
-    chi_min, chi_max = max(chi.min(), chi_mean-4*sigma_chi), min(chi.max(), chi_mean+4*sigma_chi)
-    print("chi_min, chi_max:")
-    print(chi_min, chi_max)
+    if do_plot:
+        fig=pylab.figure()
+        ax = fig.add_subplot(111)
 
-    #make interpolators for kernels
-    raw_kernel = gaussian(chi, chi_mean, sigma_chi)
-    raw_kernel_interp = interp1d(chi, raw_kernel, bounds_error=False, fill_value=0.)
-    #fftlog kernel is raw_kernel * chi^{-1/2} * growth (see comments in non_limber_integral function)
-    fftlog_kernel = raw_kernel * growth * chi**-0.5
-    fftlog_kernel[0] = 0.
-    fftlog_kernel_interp = interp1d(chi, fftlog_kernel, bounds_error=False, fill_value=0.)
+    for sigma_z in [0.1, 0.05]:
+        chi_of_z_interp = IUS(z_pk, chi)
+        chi_mean = chi_of_z_interp(z_mean)
+        sigma_chi = sigma_z * chi_of_z_interp.derivative()(z_mean)
+        print("chi_mean, sigma_chi:")
+        print(chi_mean, sigma_chi)
+        #Set chi_min/max +/- 4 sigma from mean
+        chi_min, chi_max = max(chi.min(), chi_mean-4*sigma_chi), min(chi.max(), chi_mean+4*sigma_chi)
+        print("chi_min, chi_max:")
+        print(chi_min, chi_max)
 
-    #loop through ells computing C(l) using Limber and full calculation
-    ells = np.array([1.,50.,100.])
-    #numerical settings for full calculation:
-    chi_pad_factor = 5
-    nchi = 5000
+        #make interpolators for kernels
+        raw_kernel = gaussian(chi, chi_mean, sigma_chi)
+        raw_kernel_interp = interp1d(chi, raw_kernel, bounds_error=False, fill_value=0.)
+        #fftlog kernel is raw_kernel * chi^{-1/2} * growth (see comments in non_limber_integral function)
+        fftlog_kernel = raw_kernel * growth * chi**-0.5
+        fftlog_kernel[0] = 0.
+        fftlog_kernel_interp = interp1d(chi, fftlog_kernel, bounds_error=False, fill_value=0.)
 
-    for ell in ells:
-        print("ell:",ell)
-        cl_limber = quad(limber_integrand, chi_min, chi_max, 
-                         args = (ell, raw_kernel_interp, pk0_interp_loglog, growth_interp))
-        print(cl_limber)
-        cl_full = non_limber_integral(ell, chi_min, chi_max, nchi, fftlog_kernel_interp, fftlog_kernel_interp, 
-                                      pk0_interp_loglog, chi_pad_factor=chi_pad_factor)
-        print(cl_full)
+        #loop through ells computing C(l) using Limber and full calculation
+        ells = np.linspace(1,100,50)
+        #numerical settings for full calculation:
+        chi_pad_factor = 5
+        nchi = 5000
+
+        cls_limber = np.zeros_like(ells)
+        cls_full = np.zeros_like(ells)
+        for i,ell in enumerate(ells):
+            print("ell:",ell)
+            cl_limber,_ = quad(limber_integrand, chi_min, chi_max, 
+                             args = (ell, raw_kernel_interp, pk0_interp_loglog, growth_interp))
+            cls_limber[i] = cl_limber
+            cl_full = non_limber_integral(ell, chi_min, chi_max, nchi, fftlog_kernel_interp, fftlog_kernel_interp, 
+                                          pk0_interp_loglog, chi_pad_factor=chi_pad_factor)
+            cls_full[i] = cl_full
+
+        if do_plot:
+            ax.plot(ells, cls_full/cls_limber-1, label="sigma_z = %.2f"%sigma_z)
+    if do_plot:
+        ax.legend()
+        ax.set_xlabel(r"$l$")
+        ax.set_ylabel(r"$C_l^{\mathrm{full}}/C_l^{\mathrm{limber}}-1$")
+
+    fig.savefig("pk_to_cl_test1.png")
+
+
 
 
 
