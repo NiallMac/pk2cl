@@ -27,16 +27,6 @@ def limber_integrand(chi, ell, kernel_interp, pk0_interp_loglog, growth_interp):
     pk = pk0 * g * g
     return kernel * kernel * pk / chi / chi
 
-def non_limber_integrand(logk, ell, red_kernel_interp1, red_kernel_interp2, pk0_interp_loglog, growth_interp, dchi, n_step):
-    k = np.exp(logk)
-    pk0 = np.exp(pk0_interp_loglog(logk))
-    ht = HankelTransform(ell+0.5, h=dchi, N=n_step)
-    I_1,_ = ht.integrate(red_kernel_interp1)
-    if red_kernel_interp2 is red_kernel_interp1:
-        I_2 = I_1
-    else:
-        I_2,_ = ht.integrate(red_kernel_interp2)
-    return k * k * pk0 * I_1 * I_2
 
 def non_limber_integral(ell, chimin, chimax, nchi, fftlog_kernel_interp1, fftlog_kernel_interp2, pk0_interp_loglog, chi_pad_factor=1):
     """full integral is \int_0^\inf k dk P(k,0) I_1(k) I_2(k)
@@ -44,18 +34,19 @@ def non_limber_integral(ell, chimin, chimax, nchi, fftlog_kernel_interp1, fftlog
                  \equiv \int_0^{\inf} dr_1 f(r_1)/r_1 J_{l+0.5}(kr_1) with f(r_1) = F(r_1)r_1^{0.5}D(r_1)
     The latter form is appropriate for the fft_log function which does 
     F(k) = \int_0^{\inf} dr f(r)/r J_{mu}(kr) with q=-1"""
+    q=-1
     log_chimin, log_chimax = np.log(chimin), np.log(chimax)
     log_chimin_padded, log_chimax_padded = log_chimin-chi_pad_factor, log_chimax+chi_pad_factor
     log_chi_vals = np.linspace(log_chimin, log_chimax, nchi+2*chi_pad_factor)
     chi_vals = np.exp(log_chi_vals)
     kernel1_vals = fftlog_kernel_interp1(chi_vals)
-    k_vals, I_1 = fft_log(chi_vals, kernel1_vals, -1, ell+0.5)
+    k_vals, I_1 = fft_log(chi_vals, kernel1_vals, q, ell+0.5)
     if fftlog_kernel_interp2 is fftlog_kernel_interp1:
         I_2 = I_1
     else:
         kernel2_vals = fftlog_kernel_interp2(chi_vals)
-        _, I_2 = fft_log(chi_vals, kernel2_vals, -1, ell+0.5)
-    pk_vals = pk0_interp_loglog(k_vals)
+        _, I_2 = fft_log(chi_vals, kernel2_vals, q, ell+0.5)
+    pk_vals = np.exp(pk0_interp_loglog(k_vals))
     #Now we can compute the full integral \int_0^{\inf} k dk P(k,0) I_1(k) I_2(k)
     #We are values logspaced in k, so calculate as \int_0^{inf} k^2 dlog(k) P(k,0) I_1(k) I_2(k)
     integrand_vals = k_vals * k_vals * pk_vals * I_1 * I_2
@@ -92,6 +83,7 @@ def main():
     sigma_chi = sigma_z * chi_of_z_interp.derivative()(z_mean)
     print("chi_mean, sigma_chi:")
     print(chi_mean, sigma_chi)
+    #Set chi_min/max +/- 4 sigma from mean
     chi_min, chi_max = max(chi.min(), chi_mean-4*sigma_chi), min(chi.max(), chi_mean+4*sigma_chi)
     print("chi_min, chi_max:")
     print(chi_min, chi_max)
@@ -99,15 +91,15 @@ def main():
     #make interpolators for kernels
     raw_kernel = gaussian(chi, chi_mean, sigma_chi)
     raw_kernel_interp = interp1d(chi, raw_kernel, bounds_error=False, fill_value=0.)
-    #reduced kernel is raw_kernel * chi^{-1/2} * growth
+    #fftlog kernel is raw_kernel * chi^{1/2} * growth
     fftlog_kernel = raw_kernel * growth * chi**0.5
     fftlog_kernel_interp = interp1d(chi, fftlog_kernel, bounds_error=False, fill_value=0.)
 
     #loop through ells computing C(l) using Limber and full calculation
     ells = np.array([1.,50.,100.])
     #numerical settings for full calculation:
-    dchi = 0.01
-    nchi = (chi_max-chi_min)/dchi
+    chi_pad_factor = 2
+    nchi = 1000
 
     for ell in ells:
         print("ell:",ell)
@@ -115,7 +107,7 @@ def main():
                          args = (ell, raw_kernel_interp, pk0_interp_loglog, growth_interp))
         print(cl_limber)
         cl_full = non_limber_integral(ell, chi_min, chi_max, nchi, fftlog_kernel_interp, fftlog_kernel_interp, 
-                                      pk0_interp_loglog, chi_pad_factor=2)
+                                      pk0_interp_loglog, chi_pad_factor=chi_pad_factor)
         print(cl_full)
 
 
