@@ -37,7 +37,7 @@ def non_limber_integral(ell, chimin, chimax, nchi, fftlog_kernel_interp1, fftlog
     q=-1
     log_chimin, log_chimax = np.log(chimin), np.log(chimax)
     log_chimin_padded, log_chimax_padded = log_chimin-chi_pad_factor, log_chimax+chi_pad_factor
-    log_chi_vals = np.linspace(log_chimin, log_chimax, nchi+2*chi_pad_factor)
+    log_chi_vals = np.linspace(log_chimin_padded, log_chimax_padded, nchi+2*chi_pad_factor)
     chi_vals = np.exp(log_chi_vals)
     kernel1_vals = fftlog_kernel_interp1(chi_vals)
     k_vals, I_1 = fft_log(chi_vals, kernel1_vals, q, ell+0.5)
@@ -99,7 +99,7 @@ def main():
     ells = np.array([1.,50.,100.])
     #numerical settings for full calculation:
     chi_pad_factor = 2
-    nchi = 100
+    nchi = 500
 
     for ell in ells:
         print("ell:",ell)
