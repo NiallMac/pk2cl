@@ -46,7 +46,7 @@ def non_limber_integral(ell, chimin, chimax, nchi, fftlog_kernel_interp1, fftlog
     else:
         kernel2_vals = fftlog_kernel_interp2(chi_vals)
         _, I_2 = fft_log(chi_vals, kernel2_vals, q, ell+0.5)
-    pk_vals = np.exp(pk0_interp_loglog(k_vals))
+    pk_vals = np.exp(pk0_interp_loglog(np.log(k_vals)))
     #Now we can compute the full integral \int_0^{\inf} k dk P(k,0) I_1(k) I_2(k)
     #We are values logspaced in k, so calculate as \int_0^{inf} k^2 dlog(k) P(k,0) I_1(k) I_2(k)
     integrand_vals = k_vals * k_vals * pk_vals * I_1 * I_2
@@ -99,7 +99,7 @@ def main():
     ells = np.array([1.,50.,100.])
     #numerical settings for full calculation:
     chi_pad_factor = 2
-    nchi = 1000
+    nchi = 100
 
     for ell in ells:
         print("ell:",ell)
